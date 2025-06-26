@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Indoor Data Logger Distribution Dashboard</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
+
+    
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    
+    <script src="Chakaria_Village_1.js"></script>
+
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            overflow: hidden; /* Prevent scrolling on the body */
+        }
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+        .leaflet-popup-content-wrapper {
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+        .legend-color-box {
+            width: 20px;
+            height: 20px;
+            display: inline-block;
+            margin-right: 8px;
+            vertical-align: middle;
+            border-radius: 4px;
+        }
+        #bottom-panel {
+             transition: height 0.4s ease-in-out;
+             height: 320px; /* Adjusted height for better visibility */
+        }
+        #bottom-panel.collapsed {
+            height: 48px; /* Height of the header */
+        }
+        #chart-container {
+             overflow: hidden;
+             height: calc(100% - 48px);
+             display: flex;
+             align-items: stretch;
+        }
+        #bottom-panel.collapsed #chart-container {
+             display: none;
+        }
+        .leaflet-tooltip {
+            background-color: rgba(255, 255, 255, 0.9);
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+            font-weight: bold;
+            color: #333;
+        }
+        /* Ensure sidebar content is scrollable */
+        #sidebar-content {
+             overflow-y: auto;
+             flex-grow: 1;
+        }
+        .legend-item {
+            cursor: pointer;
+            padding: 2px 4px;
+            border-radius: 4px;
+            transition: background-color 0.2s;
+        }
+        .legend-item:hover {
+            background-color: #f0f0f0;
+        }
+        .legend-item.selected {
+            background-color: #e0e7ff;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800 flex flex-col h-screen">
+
+    <div class="flex flex-1 overflow-hidden">
+        <aside class="w-80 bg-white shadow-lg p-4 flex flex-col">
+            <header class="pb-2 border-b text-center mb-4">
+                <h1 class="text-xl font-bold text-gray-900">GIS Dashboard</h1>
+                <p class="text-xs text-gray-500">Data Logger Analysis</p>
+            </header>
+            
+            <div id="sidebar-content" class="space-y-4">
+                <div>
+                    <h2 class="text-md font-semibold text-gray-700"><i class="fas fa-sliders-h w-5"></i> Filters</h2>
+                    <div class="space-y-3 mt-2">
+                        <div>
+                            <label for="villageFilter" class="block text-sm font-medium text-gray-600"><i class="fas fa-map-marked-alt w-5 inline-block text-center"></i>Village</label>
+                            <select id="villageFilter" class="mt-1 block w-full bg-gray-50 border-gray-300 rounded-md shadow-sm py-1 px-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                                <option value="all">All Villages</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label for="hhTypeFilter" class="block text-sm font-medium text-gray-600"><i class="fas fa-home w-5 inline-block text-center"></i>Household Material</label>
+                            <select id="hhTypeFilter" class="mt-1 block w-full bg-gray-50 border-gray-300 rounded-md shadow-sm py-1 px-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                                <option value="all">All Types</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label for="lulcFilter" class="block text-sm font-medium text-gray-600"><i class="fas fa-mountain-sun w-5 inline-block text-center"></i>Land Use Feature</label>
+                            <select id="lulcFilter" class="mt-1 block w-full bg-gray-50 border-gray-300 rounded-md shadow-sm py-1 px-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                                <option value="all">All Features</option>
+                            </select>
+                        </div>
+                        <button id="resetFilters" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-md transition-transform transform hover:scale-105 shadow-md">
+                            <i class="fas fa-sync-alt mr-2"></i>Reset Filters
+                        </button>
+                    </div>
+                </div>
+            </div>
+             <footer class="text-center text-xs text-gray-400 pt-4 mt-auto border-t">
+                <p>&copy; 2024 Advanced GIS Dashboard</p>
+            </footer>
+        </aside>
+
+        <main class="flex-1 h-full">
+            <div id="map" class="h-full w-full"></div>
+        </main>
+    </div>
+    
+    <div id="bottom-panel" class="bg-white shadow-[-4px_0_8px_rgba(0,0,0,0.1)]">
+        <div id="chart-panel-header" class="p-3 bg-gray-100 border-t cursor-pointer text-center font-semibold text-gray-600 hover:bg-gray-200">
+            <i class="fas fa-chart-area mr-2"></i>Analysis Dashboard <i id="chart-toggle-icon" class="fas fa-chevron-up ml-2"></i>
+        </div>
+        <div id="chart-container" class="flex p-2 items-stretch h-full gap-4">
+             <div class="p-2 flex flex-col items-center justify-center bg-gray-50 rounded-lg" style="flex: 1;">
+                  <h2 class="text-md font-semibold text-gray-700 mb-4"><i class="fas fa-calculator w-5"></i> Statistics</h2>
+                    <div class="bg-indigo-100 p-4 rounded-lg shadow-inner text-sm space-y-4 w-full">
+                        <div class="flex justify-between items-center text-gray-800">
+                            <span class="font-medium"><i class="fas fa-satellite-dish w-5 text-indigo-500"></i> Displayed:</span>
+                            <span id="displayedCount" class="font-bold text-lg text-indigo-600">0</span>
+                        </div>
+                        <div class="flex justify-between items-center text-gray-800">
+                            <span class="font-medium"><i class="fas fa-broadcast-tower w-5 text-indigo-500"></i> Total:</span>
+                            <span id="totalCount" class="font-bold text-lg text-indigo-600">0</span>
+                        </div>
+                    </div>
+             </div>
+             <div class="p-2 relative" style="flex: 2;">
+                <canvas id="hhTypeChart"></canvas>
+             </div>
+             <div class="p-2 relative" style="flex: 4;">
+                <canvas id="lulcChart"></canvas>
+             </div>
+        </div>
+    </div>
+
+    <script>
+        // --- 1. DATA INITIALIZATION ---
+        const loggerData = [
+            { vid: 101, chid: 101041300, lon: 92.076806, lat: 21.834056, hh_type: "Cement-Cement", Village_Na: "Maizpara", HH_Types: "Cement-Cement", lulc_types: "Near Agricuture Land" },
+            { vid: 106, chid: 106003602, lon: 92.053749, lat: 21.81325, hh_type: "Mud-Tin", Village_Na: "Daingakata", HH_Types: "Mud-Tin", lulc_types: "Near Agricuture Land" },
+            { vid: 108, chid: 108075500, lon: 92.080167, lat: 21.807167, hh_type: "Tin-Tin", Village_Na: "Baniarchar", HH_Types: "Tin-Tin", lulc_types: "Hilly Area" },
+            { vid: 108, chid: 108084000, lon: 92.074056, lat: 21.811861, hh_type: "Bamboo-Tin", Village_Na: "Baniachara", HH_Types: "Bamboo-Tin", lulc_types: "Vegetation Area" },
+            { vid: 111, chid: 111027000, lon: 92.056808, lat: 21.804333, hh_type: "Cement-Tin", Village_Na: "Dakshin Baraitali", HH_Types: "Cement-Tin", lulc_types: "Vegetation Area" },
+            { vid: 112, chid: 112070600, lon: 92.027473, lat: 21.79414, hh_type: "Bamboo-Tin", Village_Na: "Gobindapur", HH_Types: "Bamboo-Tin", lulc_types: "Flood Plain" },
+            { vid: 113, chid: 113062100, lon: 92.02858, lat: 21.820889, hh_type: "Mud-Tin", Village_Na: "Hapaliakata", HH_Types: "Mud-Tin", lulc_types: "Vegetation Area" },
+            { vid: 202, chid: 202008500, lon: 92.054361, lat: 21.832639, hh_type: "Cement-Cement", Village_Na: "Katakhali", HH_Types: "Cement-Cement", lulc_types: "Near Waterbody" },
+            { vid: 205, chid: 205003000, lon: 92.056549, lat: 21.8346, hh_type: "Mud-Tin", Village_Na: "Rakhainpara", HH_Types: "Mud-Tin", lulc_types: "Flood Plain" },
+            { vid: 207, chid: 207031501, lon: 92.066944, lat: 21.848, hh_type: "Cement-Tin", Village_Na: "Shantinagar", HH_Types: "Cement-Tin", lulc_types: "Vegetation Area" },
+            { vid: 214, chid: 214003300, lon: 92.054617, lat: 21.844317, hh_type: "Cement-Cement", Village_Na: "Kulalpara", HH_Types: "Cement-Cement", lulc_types: "Hilly Area" },
+            { vid: 219, chid: 219002500, lon: 92.051231, lat: 21.850849, hh_type: "Bamboo-Tin", Village_Na: "Palpara", HH_Types: "Bamboo-Tin", lulc_types: "Near Waterbody" },
+            { vid: 236, chid: 236010500, lon: 92.060333, lat: 21.848233, hh_type: "Cement-Tin", Village_Na: "Stationpara", HH_Types: "Cement-Tin", lulc_types: "Hilly Area" },
+            { vid: 242, chid: 242009500, lon: 92.069583, lat: 21.886722, hh_type: "Bamboo-Tin", Village_Na: "Kattoli", HH_Types: "Bamboo-Tin", lulc_types: "Hilly Area" },
+            { vid: 303, chid: 303019300, lon: 91.986832, lat: 21.783806, hh_type: "Cement-Cement", Village_Na: "Purbo Kunakhali", HH_Types: "Cement-Cement", lulc_types: "Near Salt Field" },
+            { vid: 304, chid: 304040401, lon: 91.977472, lat: 21.781778, hh_type: "Cement-Tin", Village_Na: "Maddhya Kunakhali", HH_Types: "Cement-Tin", lulc_types: "Flood Plain" },
+            { vid: 307, chid: 307007900, lon: 92.007309, lat: 21.786249, hh_type: "Cement-Tin", Village_Na: "Krisnapur", HH_Types: "Cement-Tin", lulc_types: "Near openspace" },
+            { vid: 308, chid: 308016600, lon: 92.013969, lat: 21.772667, hh_type: "Cement-Tin", Village_Na: "Chhainama Para", HH_Types: "Cement-Tin", lulc_types: "Near openspace" },
+            { vid: 309, chid: 309058902, lon: 92.010278, lat: 21.797, hh_type: "Bamboo-Tin", Village_Na: "Furotia Khali", HH_Types: "Bamboo-Tin", lulc_types: "Near Agricuture Land" },
+            { vid: 323, chid: 323008300, lon: 92.017319, lat: 21.785549, hh_type: "Bamboo-Tin", Village_Na: "Dakshin Bahaddarkata", HH_Types: "Bamboo-Tin", lulc_types: "Highly Dense Buildup Area" },
+            { vid: 401, chid: 401006001, lon: 92.042139, lat: 21.784361, hh_type: "Mud-Tin", Village_Na: "Chotto Bheola", HH_Types: "Mud-Tin", lulc_types: "Near River" },
+            { vid: 404, chid: 404011800, lon: 92.0538, lat: 21.796767, hh_type: "Tin-Tin", Village_Na: "Hasimar Kata", HH_Types: "Tin-Tin", lulc_types: "Near openspace" },
+            { vid: 407, chid: 407010310, lon: 92.048733, lat: 21.792433, hh_type: "Tin-Tin", Village_Na: "Hamidullah Sikderpara", HH_Types: "Tin-Tin", lulc_types: "Flood Plain" },
+            { vid: 409, chid: 409009502, lon: 92.053085, lat: 21.784361, hh_type: "Bamboo-Tin", Village_Na: "Dwipkul", HH_Types: "Bamboo-Tin", lulc_types: "Near River" },
+            { vid: 415, chid: 415004703, lon: 92.072, lat: 21.788917, hh_type: "Bamboo-Tin", Village_Na: "Baniarkum", HH_Types: "Bamboo-Tin", lulc_types: "Vegetation Area" },
+            { vid: 418, chid: 418031601, lon: 92.039806, lat: 21.790583, hh_type: "Mud-Tin", Village_Na: "Dakshin Khilsadak", HH_Types: "Mud-Tin", lulc_types: "Highly Dense Buildup Area" },
+            { vid: 502, chid: 502008800, lon: 92.019417, lat: 21.753695, hh_type: "Cement-Tin", Village_Na: "Kaddachura", HH_Types: "Cement-Tin", lulc_types: "Near Waterbody" },
+            { vid: 506, chid: 506039300, lon: 92.028999, lat: 21.771084, hh_type: "Bamboo-Tin", Village_Na: "Sikdar Para", HH_Types: "Bamboo-Tin", lulc_types: "Near Road" },
+            { vid: 511, chid: 511000801, lon: 92.039944, lat: 21.777583, hh_type: "Cement-Cement", Village_Na: "Kalagazi SikdarPara", HH_Types: "Cement-Cement", lulc_types: "Vegetation Area" },
+            { vid: 516, chid: 516012602, lon: 92.059692, lat: 21.770306, hh_type: "Bamboo-Tin", Village_Na: "Mabiar Baper Para", HH_Types: "Bamboo-Tin", lulc_types: "Flood Plain" },
+            { vid: 517, chid: 517002500, lon: 92.054306, lat: 21.772028, hh_type: "Cement-Cement", Village_Na: "Jelepara", HH_Types: "Cement-Cement", lulc_types: "Flood Plain" },
+            { vid: 601, chid: 601003200, lon: 92.054695, lat: 21.762278, hh_type: "Tin-Tin", Village_Na: "Shaharbil Purba Para", HH_Types: "Tin-Tin", lulc_types: "Highly Dense Buildup Area" },
+            { vid: 606, chid: 606019000, lon: 92.050361, lat: 21.761278, hh_type: "Tin-Tin", Village_Na: "Shaharbil Paschim Para", HH_Types: "Tin-Tin", lulc_types: "Near Agricuture Land" },
+            { vid: 607, chid: 607000400, lon: 92.059639, lat: 21.759027, hh_type: "Cement-Cement", Village_Na: "Madrasha Para", HH_Types: "Cement-Cement", lulc_types: "Near Road" },
+            { vid: 609, chid: 609032300, lon: 92.060389, lat: 21.758667, hh_type: "Cement-Tin", Village_Na: "Maizghona purba Para", HH_Types: "Cement-Tin", lulc_types: "Near Road" },
+            { vid: 613, chid: 613012000, lon: 92.044304, lat: 21.74925, hh_type: "Bamboo-Tin", Village_Na: "Shahapur", HH_Types: "Bamboo-Tin", lulc_types: "Near Agricuture Land" },
+            { vid: 623, chid: 623005500, lon: 92.018913, lat: 21.738583, hh_type: "Bamboo-Tin", Village_Na: "Failla Para", HH_Types: "Bamboo-Tin", lulc_types: "Near Salt Field" },
+            { vid: 701, chid: 701131500, lon: 92.092139, lat: 21.768611, hh_type: "Cement-Cement", Village_Na: "Saker Mohammad char", HH_Types: "Cement-Cement", lulc_types: "Near Tobacco Field" },
+            { vid: 703, chid: 703035100, lon: 92.087306, lat: 21.766667, hh_type: "Cement-Tin", Village_Na: "Uttar Lotony", HH_Types: "Cement-Tin", lulc_types: "Near Agricuture Land" },
+            { vid: 705, chid: 705034000, lon: 92.108803, lat: 21.753166, hh_type: "Cement-Cement", Village_Na: "Proper Kakara", HH_Types: "Cement-Tin", lulc_types: "Near River" },
+            { vid: 708, chid: 708024700, lon: 92.124028, lat: 21.766583, hh_type: "Bamboo-Tin", Village_Na: "Dakshin Surajpur", HH_Types: "Bamboo-Tin", lulc_types: "Hilly Area" },
+            { vid: 801, chid: 801006800, lon: 91.976196, lat: 21.770611, hh_type: "Cement-Cement", Village_Na: "Muchar Para", HH_Types: "Cement-Cement", lulc_types: "Highly Dense Buildup Area" },
+            { vid: 804, chid: 804008600, lon: 91.978722, lat: 21.76664, hh_type: "Bamboo-Tin", Village_Na: "Demoshia Bazar Para", HH_Types: "Cement-Tin", lulc_types: "Low-Lying Area" },
+            { vid: 811, chid: 811006301, lon: 91.978333, lat: 21.757556, hh_type: "Cement-Tin", Village_Na: "Ammer Dera Para", HH_Types: "Cement-Tin", lulc_types: "Low-Lying Area" },
+            { vid: 812, chid: 812016000, lon: 91.963943, lat: 21.752443, hh_type: "Bamboo-Tin", Village_Na: "Daskhali Para", HH_Types: "Bamboo-Tin", lulc_types: "Near Salt Field" },
+            { vid: 818, chid: 818001600, lon: 91.972694, lat: 21.741028, hh_type: "Cement-Tin", Village_Na: "Darbeshkata Manik Para", HH_Types: "Cement-Tin", lulc_types: "Near Salt Field" },
+            { vid: 820, chid: 820021200, lon: 91.990889, lat: 21.759694, hh_type: "Bamboo-Tin", Village_Na: "Tekhsira Para", HH_Types: "Bamboo-Tin", lulc_types: "Low-Lying Area" },
+            { vid: 711, chid: 711060300, lon: 92.147472, lat: 21.755917, hh_type: "Cement-Tin", Village_Na: "Dakshin Manikpur", HH_Types: "Cement-Tin", lulc_types: "Near Tobacco Field" },
+            { vid: 712, chid: 712055902, lon: 92.143082, lat: 21.761499, hh_type: "Bamboo-Tin", Village_Na: "Uttar Manikpur", HH_Types: "Bamboo-Tin", lulc_types: "Near Tobacco Field" }
+        ];
+
+        // --- 2. MAP SETUP ---
+        const map = L.map('map').setView([21.78, 92.05], 12);
+
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        }).addTo(map);
+
+        let villageLayer;
+        const markerLayer = L.layerGroup().addTo(map);
+        
+        const hhTypeColors = {
+            'Bamboo-Tin': '#1f77b4', 'Cement-Cement': '#ff7f0e',
+            'Cement-Tin': '#2ca02c', 'Mud-Tin': '#d62728',
+            'Tin-Tin': '#9467bd', 'default': '#8c564b'
+        };
+        const lulcColors = {
+            'Near Agricuture Land': '#8dd3c7', 'Hilly Area': '#ffffb3', 'Vegetation Area': '#bebada',
+            'Flood Plain': '#fb8072', 'Near Waterbody': '#80b1d3', 'Near Salt Field': '#fdb462',
+            'Near openspace': '#b3de69', 'Highly Dense Buildup Area': '#fccde5', 'Near River': '#d9d9d9',
+            'Near Road': '#bc80bd', 'Low-Lying Area': '#ccebc5', 'Near Tobacco Field': '#ffed6f',
+            'default': '#a6cee3'
+        };
+
+        // --- 3. CHART SETUP ---
+        let hhTypeChart, lulcChart;
+        const chartBaseOptions = {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    display: false 
+                }
+            }
+        };
+        
+        function formatLulcLabel(label) {
+            const words = label.split(' ');
+            if (words.length > 2) {
+                let halfway = Math.ceil(words.length / 2);
+                let line1 = words.slice(0, halfway).join(' ');
+                let line2 = words.slice(halfway).join(' ');
+                return [line1, line2];
+            }
+            return label;
+        }
+
+
+        function initializeCharts() {
+            Chart.register(ChartDataLabels);
+            const hhCtx = document.getElementById('hhTypeChart').getContext('2d');
+            hhTypeChart = new Chart(hhCtx, {
+                type: 'doughnut',
+                data: { labels: [], datasets: [] },
+                options: {
+                    ...chartBaseOptions,
+                     plugins: {
+                        title: { display: true, text: 'Household Types', font: { size: 16, weight: 'bold' }, color: '#333' },
+                        legend: { position: 'right', labels: { boxWidth: 15, font: {size: 10} } },
+                        datalabels: {
+                            formatter: (value, ctx) => {
+                                let sum = ctx.chart.data.datasets[0].data.reduce((a, b) => a + b, 0);
+                                let percentage = (value * 100 / sum).toFixed(1) + '%';
+                                return percentage;
+                            },
+                            color: '#fff',
+                             font: {
+                                weight: 'bold'
+                            }
+                        }
+                    }
+                }
+            });
+
+            const lulcCtx = document.getElementById('lulcChart').getContext('2d');
+            lulcChart = new Chart(lulcCtx, {
+                type: 'bar',
+                data: { labels: [], datasets: [] },
+                options: {
+                    ...chartBaseOptions,
+                    scales: {
+                         y: { beginAtZero: true, ticks: { precision: 0 }, title: {display: true, text: 'Number of Loggers'} },
+                         x: { ticks: { font: {size: 10}, maxRotation: 45, minRotation: 45, autoSkip: false }, title: {display: true, text: 'Land Use Type'} }
+                    },
+                     plugins: {
+                        title: { display: true, text: 'Land Use Features', font: { size: 16, weight: 'bold' }, color: '#333' }
+                    }
+                }
+            });
+        }
+
+        // --- 4. CORE APPLICATION LOGIC ---
+        
+        function normalizeName(name) {
+            if (typeof name !== 'string') return '';
+            return name.trim().replace(/[\r\n\s]+/g, ' ').replace(/\u00A0/g, ' ');
+        }
+
+        function populateFilters() {
+            const villageFilter = document.getElementById('villageFilter');
+            const hhTypeFilter = document.getElementById('hhTypeFilter');
+            const lulcFilter = document.getElementById('lulcFilter');
+            
+            const villages = [...new Set(json_Chakaria_Village_1.features.map(f => normalizeName(f.properties.name)))].sort();
+            const hhTypes = [...new Set(loggerData.map(item => item.HH_Types))].sort();
+            const lulcTypes = [...new Set(loggerData.map(item => item.lulc_types))].sort();
+
+            villages.forEach(v => villageFilter.innerHTML += `<option value="${v}">${v}</option>`);
+            hhTypes.forEach(h => hhTypeFilter.innerHTML += `<option value="${h}">${h}</option>`);
+            lulcTypes.forEach(l => lulcFilter.innerHTML += `<option value="${l}">${l}</option>`);
+        }
+        
+        function updateDashboard() {
+            markerLayer.clearLayers();
+            villageLayer.eachLayer(layer => villageLayer.resetStyle(layer));
+
+            const village = document.getElementById('villageFilter').value;
+            const hhType = document.getElementById('hhTypeFilter').value;
+            const lulc = document.getElementById('lulcFilter').value;
+
+            const filteredData = loggerData.filter(item => 
+                (village === 'all' || normalizeName(item.Village_Na) === village) &&
+                (hhType === 'all' || item.HH_Types === hhType) &&
+                (lulc === 'all' || item.lulc_types === lulc)
+            );
+            
+            filteredData.forEach(addMarker);
+            updateStats(filteredData.length, loggerData.length);
+            updateCharts(filteredData);
+            
+            const villagesToHighlight = new Set(filteredData.map(item => normalizeName(item.Village_Na)));
+            
+            if (village !== 'all') {
+                zoomToVillage(village);
+            } else if (lulc !== 'all' || hhType !== 'all') {
+                highlightFilteredVillages(villagesToHighlight);
+            }
+        }
+        
+        function addMarker(item) {
+            const color = hhTypeColors[item.HH_Types] || hhTypeColors.default;
+            const marker = L.circleMarker([item.lat, item.lon], {
+                radius: 8, fillColor: color, color: '#fff', weight: 2, opacity: 1, fillOpacity: 0.9
+            }).addTo(markerLayer);
+
+            const popupContent = `<div class="space-y-1"><h3 class="text-base font-bold">${item.Village_Na}</h3><p><b><i class="fas fa-home text-gray-500"></i> Household:</b> ${item.HH_Types}</p><p><b><i class="fas fa-mountain-sun text-gray-500"></i> Land Use:</b> ${item.lulc_types}</p></div>`;
+            marker.bindPopup(popupContent);
+        }
+        
+        function updateStats(displayed, total) {
+            document.getElementById('displayedCount').innerText = displayed;
+            document.getElementById('totalCount').innerText = total;
+        }
+
+        function updateCharts(data) {
+            const hhTypeCounts = data.reduce((acc, item) => { acc[item.HH_Types] = (acc[item.HH_Types] || 0) + 1; return acc; }, {});
+            const hhLabels = Object.keys(hhTypeCounts);
+            hhTypeChart.data.labels = hhLabels;
+            hhTypeChart.data.datasets = [{ data: Object.values(hhTypeCounts), backgroundColor: hhLabels.map(l => hhTypeColors[l] || hhTypeColors.default), borderColor: '#fff', borderWidth: 2 }];
+            hhTypeChart.update();
+            
+            const lulcCounts = data.reduce((acc, item) => { acc[item.lulc_types] = (acc[item.lulc_types] || 0) + 1; return acc; }, {});
+            const lulcLabels = Object.keys(lulcCounts);
+            lulcChart.data.labels = lulcLabels.map(label => formatLulcLabel(label));
+            lulcChart.data.datasets = [{ label: 'Count', data: Object.values(lulcCounts), backgroundColor: lulcLabels.map(l => lulcColors[l] || lulcColors.default), borderColor: lulcLabels.map(l => lulcColors[l] || lulcColors.default), borderWidth: 1 }];
+            lulcChart.update();
+        }
+        
+        function resetDashboard() {
+            document.getElementById('villageFilter').value = 'all';
+            document.getElementById('hhTypeFilter').value = 'all';
+            document.getElementById('lulcFilter').value = 'all';
+            villageLayer.eachLayer(layer => villageLayer.resetStyle(layer));
+            updateDashboard();
+            map.fitBounds(villageLayer.getBounds());
+        }
+
+        function zoomToVillage(villageName) {
+            villageLayer.eachLayer(layer => {
+                const layerName = normalizeName(layer.feature.properties.name);
+                if (layerName === villageName) {
+                    map.fitBounds(layer.getBounds());
+                    layer.setStyle({ color: '#eab308', weight: 4, fillOpacity: 0.6, fillColor: '#fde047' });
+                } else {
+                    villageLayer.resetStyle(layer);
+                }
+            });
+        }
+        
+        function highlightFilteredVillages(villageSet) {
+             const highlightedLayers = [];
+             villageLayer.eachLayer(layer => {
+                const layerName = normalizeName(layer.feature.properties.name);
+                if (villageSet.has(layerName)) {
+                    layer.setStyle({ color: '#2563eb', weight: 3, fillOpacity: 0.5, fillColor: '#60a5fa' });
+                    highlightedLayers.push(layer);
+                } else {
+                     villageLayer.resetStyle(layer);
+                }
+            });
+            if (highlightedLayers.length > 0) {
+                const featureGroup = L.featureGroup(highlightedLayers);
+                map.fitBounds(featureGroup.getBounds());
+            }
+        }
+
+        function handleChartClick(chart, event) {
+            const points = chart.getElementsAtEventForMode(event, 'nearest', { intersect: true }, true);
+            if (points.length) {
+                const firstPoint = points[0];
+                let label = chart.data.labels[firstPoint.index];
+                if(Array.isArray(label)) { // Handle multi-line labels
+                    label = label.join(' ');
+                }
+                document.getElementById('villageFilter').value = 'all'; // Reset village filter when a chart is clicked
+                if (chart.canvas.id === 'hhTypeChart') {
+                    document.getElementById('hhTypeFilter').value = label;
+                } else if (chart.canvas.id === 'lulcChart') {
+                    document.getElementById('lulcFilter').value = label;
+                }
+                updateDashboard();
+            }
+        }
+        
+        // --- 5. INITIALIZATION & EVENT LISTENERS ---
+        document.addEventListener('DOMContentLoaded', () => {
+            if (typeof json_Chakaria_Village_1 === 'undefined') {
+                alert("Error: The village shapefile (Chakaria_Village_1.js) could not be found. Please ensure it's in the correct directory.");
+                return;
+            }
+            
+            villageLayer = L.geoJSON(json_Chakaria_Village_1, {
+                style: { color: "#374151", weight: 2.5, opacity: 0.8, fillOpacity: 0.1, fillColor: '#9ca3af' },
+                onEachFeature: function(feature, layer) {
+                    layer.bindTooltip(normalizeName(feature.properties.name));
+                    layer.on({
+                        mouseover: (e) => {
+                           const targetLayer = e.target;
+                           targetLayer.setStyle({ weight: 3.5, color: '#f59e0b', fillOpacity: 0.5, fillColor: '#fef08a' });
+                        },
+                        mouseout: (e) => {
+                            villageLayer.resetStyle(e.target);
+                        },
+                        click: (e) => {
+                           document.getElementById('villageFilter').value = normalizeName(e.target.feature.properties.name);
+                           updateDashboard();
+                        }
+                    })
+                }
+            }).addTo(map);
+
+            const legend = L.control({position: 'bottomright'});
+            legend.onAdd = function (map) {
+                const div = L.DomUtil.create('div', 'info legend bg-white bg-opacity-90 p-3 rounded-lg shadow-lg text-sm');
+                div.innerHTML += '<h4 class="font-bold mb-2"><i class="fas fa-home mr-2"></i>Household Types</h4>';
+                for (const type in hhTypeColors) {
+                    if (type !== 'default') {
+                        const count = loggerData.filter(item => item.HH_Types === type).length;
+                       div.innerHTML += `<div class="flex items-center legend-item" data-type="${type}"><i class="legend-color-box" style="background:${hhTypeColors[type]}"></i> ${type} (${count})</div>`;
+                    }
+                }
+                 // Add click event listeners to legend items
+                div.querySelectorAll('.legend-item').forEach(item => {
+                    item.addEventListener('click', () => {
+                        document.getElementById('hhTypeFilter').value = item.dataset.type;
+                        // highlight the selected item
+                        document.querySelectorAll('.legend-item').forEach(i => i.classList.remove('selected'));
+                        item.classList.add('selected');
+                        updateDashboard();
+                    });
+                });
+                return div;
+            };
+            legend.addTo(map);
+
+            const chartPanelHeader = document.getElementById('chart-panel-header');
+            const chartToggleIcon = document.getElementById('chart-toggle-icon');
+
+            chartPanelHeader.addEventListener('click', () => {
+                document.getElementById('bottom-panel').classList.toggle('collapsed');
+                chartToggleIcon.classList.toggle('fa-chevron-up');
+                chartToggleIcon.classList.toggle('fa-chevron-down');
+            });
+            
+            document.getElementById('villageFilter').addEventListener('change', updateDashboard);
+            document.getElementById('hhTypeFilter').addEventListener('change', updateDashboard);
+            document.getElementById('lulcFilter').addEventListener('change', updateDashboard);
+            document.getElementById('resetFilters').addEventListener('click', resetDashboard);
+            
+            populateFilters();
+            initializeCharts();
+            
+            document.getElementById('hhTypeChart').onclick = (evt) => handleChartClick(hhTypeChart, evt);
+            document.getElementById('lulcChart').onclick = (evt) => handleChartClick(lulcChart, evt);
+
+            updateDashboard();
+        });
+
+    </script>
+</body>
+</html>
